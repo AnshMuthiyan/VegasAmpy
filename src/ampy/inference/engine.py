@@ -352,11 +352,14 @@ def log_likelihood_model(theta, engine, param_view):
     try:
         modeled = engine(param_view.modeling_plugins, params)
     except ValueError as e:
-        # Return -inf if the model failed. This prevents a
-        # long run from dying due to a single failure.
+        print(f"[DEBUG] Likelihood model raised ValueError: {e}")
+        print(f"[DEBUG] theta = {theta}")
         return -np.inf
 
     for plugin in param_view.inference_plugins:
-        return -0.5 * plugin(
-            modeled, engine.observation, params.get(f"{plugin.name}")
-        )
+        ll = -0.5 * plugin(modeled, engine.observation, params.get(f"{plugin.name}"))
+
+        if not np.isfinite(ll):
+            print(f"[DEBUG] Likelihood returned {ll} | theta = {theta}")
+
+        return ll
