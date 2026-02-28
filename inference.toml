@@ -1,6 +1,6 @@
-nwalkers   = 70        # number of walkers
-iterations = 2      # production iterations
-burn       = 0       # burn-in iterations
-sampler    = "ensemble" # "tempered" (recommended) or "ensemble"
-#ntemps     = 1        # number of temperatures (tempered only)
-# workers  = 1         # parallel workers (omit for single process)
+nwalkers   = 100        # number of walkers
+iterations = 1500      # production iterations
+burn       = 1500     # burn-in iterations
+sampler    = "tempered" # "tempered" (recommended) or "ensemble"
+ntemps     = 10        # number of temperatures (tempered only)
+workers  = 32         # parallel workers (omit for single process)
