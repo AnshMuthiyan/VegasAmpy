@@ -223,6 +223,11 @@ class AMPy:
 
         self.summary(output_dir / "report.json")
         self.light_curve(path=output_dir / "light_curve.pdf")
+        try:
+            self.light_curve(spread = 1, sigma= 1, path=output_dir / "light_curve_pretty.pdf")
+        except:
+            print("Pretty light curve failed to generate.")
+            pass
         self.spectral_plot(path=output_dir / "spectral_plot.pdf")
         self.density_profile(path=output_dir / "density_profile.pdf")
         self.corner_plot(path=output_dir / "corner.pdf")
@@ -248,9 +253,22 @@ class AMPy:
         """
         fig, ax = plotting.generate_light_curve(
             self.get_observation(), self.get_plugins(), self.get_best_params(),
-            spread=spread
+            spread=spread, sigma=sigma
         )
 
+        if path is not None:
+            utils.save_plot_unique(path)
+
+        return fig, ax
+    
+    @requires_complete
+    def pretty_light_curve(self, spread=None, simga =None, path=None):
+        """Generates the light curve using the best parameters with a spacing for legibility."""
+
+        fig, ax = plotting.generate_light_curve(
+            self.get_observation(), self.get_plugins(), self.get_best_params(),
+            spread={'afterglow_flux': 0.5}
+        )
         if path is not None:
             utils.save_plot_unique(path)
 

@@ -1,6 +1,6 @@
 import numpy as np
 
-from jetfit.core.utils import days_to_sec
+# from jetfit.core.utils import days_to_sec
 
 try:
     from VegasAfterglow import Model, ISM, Wind, Medium, TophatJet, GaussianJet, PowerLawJet, powerLaw
@@ -156,6 +156,9 @@ class powerlawVegasModel:
         self._details_cache[t_key] = details
         return details
 
+    def days_to_sec(x):
+        """ Convert days to seconds. """
+        return x * 86400
 
     def _setup_model(self):
         """Initialize the VegasAfterglow model with current parameters."""
@@ -294,7 +297,7 @@ class powerlawVegasModel:
         np.ndarray of float
             Minimum synchrotron frequency [Hz].
         """
-        t_sec = days_to_sec(t)
+        t_sec = self.days_to_sec(t)
         t_sec = np.atleast_1d(t_sec)
         try:
             details = self._get_details(t_sec)
@@ -322,7 +325,7 @@ class powerlawVegasModel:
         np.ndarray of float
             Cooling frequency [Hz].
         """
-        t_sec = days_to_sec(t)
+        t_sec = self.days_to_sec(t)
         t_sec = np.atleast_1d(t_sec)
         try:
             details = self._get_details(t_sec)
@@ -350,7 +353,7 @@ class powerlawVegasModel:
         np.ndarray of float
             Self-absorption frequency [Hz].
         """
-        t_sec = days_to_sec(t)
+        t_sec = self.days_to_sec(t)
         t_sec = np.atleast_1d(t_sec)
         try:
             details = self._get_details(t_sec)
@@ -450,7 +453,7 @@ class powerlawVegasModel:
         np.ndarray
             Blast wave radius [cm].
         """
-        t_sec = days_to_sec(t)
+        t_sec = self.days_to_sec(t)
         t_sec = np.atleast_1d(t_sec)
         try:
             details = self._get_details(t_sec)
@@ -479,7 +482,7 @@ class powerlawVegasModel:
         np.ndarray of float
             Spectral flux density [mJy].
         """
-        t_sec = days_to_sec(t)
+        t_sec = self.days_to_sec(t)
         t_sec = np.atleast_1d(t_sec)
         nu = np.atleast_1d(nu)
         # Use a tuple of (tuple(t_sec), tuple(nu)) as cache key
@@ -612,16 +615,16 @@ class powerlawVegasModel:
         t_parts, nu_parts = [], []
 
         if has_sfm:
-            t_parts.append(days_to_sec(obs.times()[sfm]))
+            t_parts.append(self.days_to_sec(obs.times()[sfm]))
             nu_parts.append(obs.freqs()[sfm])
 
         if has_ifm:
-            t_ifm = days_to_sec(obs.times()[ifm])
+            t_ifm = self.days_to_sec(obs.times()[ifm])
             t_parts += [t_ifm, t_ifm]
             nu_parts += [obs.int_lowers()[ifm], obs.int_uppers()[ifm]]
 
         if has_sim:
-            t_sim = days_to_sec(obs.times()[sim])
+            t_sim = self.days_to_sec(obs.times()[sim])
             t_parts += [t_sim, t_sim]
             nu_parts += [obs.int_lowers()[sim], obs.int_uppers()[sim]]
 

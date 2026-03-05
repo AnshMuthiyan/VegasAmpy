@@ -1,3 +1,4 @@
+from collections import defaultdict
 from inspect import isfunction
 
 import arviz as az
@@ -156,6 +157,7 @@ def generate_light_curve(
     ndata=100,
     spread=None,
     ax=None,
+    sigma=None,
     ll_kwargs=None,
     plot_kwargs=None
 ):
@@ -198,27 +200,45 @@ def generate_light_curve(
     matplotlib.axes.Axes
         The light curve axes.
     """
-    # Generate the modeled light curve flux
+    # Best-fit flux for each observed band
     flux = generate_model(obs, plugins, params, ndata)
 
-    # Generate the time evenly in log space from
-    # the earliest to the latest observation time
+    # Log-spaced time array spanning the observation epoch
     times = np.geomspace(
         obs.epoch()[0], obs.epoch()[1], num=ndata, dtype=float
     )
 
-    # Add the model to the light curve
+    # If MCMC samples are provided, compute the 16th–84th percentile
+    # uncertainty band for each band by stacking models across samples
+    sigma_bands = None
+    if sigma is not None:
+        stacked = defaultdict(list)
+        for s in sigma:
+            try:
+                for band, f in generate_model(obs, plugins, s, ndata).items():
+                    stacked[band].append(f)
+            except Exception:
+                continue
+        sigma_bands = {
+            band: np.percentile(fluxes, [16, 84], axis=0)
+            for band, fluxes in stacked.items()
+        }
+
+    # Plot model lines (and uncertainty bands if sigma was provided)
     fig, ax = plot_lightcurve_model(
-        flux, times, spread, ax, ll_kwargs, plot_kwargs
+        flux, times, spread, ax, sigma_bands, ll_kwargs, plot_kwargs
     )
 
-    # Add the observation to the light curve
-    ax = plot_observation(obs, ax=ax)
+    # Overlay the observed data points with per-band error bars
+    ax = plot_observation(obs, spread=spread, ax=ax)
 
     ax.set_xlim(times.min(), times.max())
 
+    # Label the y-axis to indicate arbitrary scaling when spread is applied
+    if spread is not None:
+        ax.set_ylabel('Arbitrarily Scaled Flux Density')
+
     ax.legend(
-        # Legend has to be added after the fact
         loc='lower left', ncols=2, columnspacing=0.25,
         handletextpad=0.25, fontsize=12
     )
@@ -292,6 +312,7 @@ def plot_lightcurve_model(
     times,
     spread=None,
     ax=None,
+    sigma=None,
     ll_kwargs=None,
     plot_kwargs=None
 ):
@@ -334,15 +355,20 @@ def plot_lightcurve_model(
     ax = ax or default_ax
     ll_kwargs = {'linewidth': 1.0} | (ll_kwargs or {})
 
-    # Plot each band of data as a separate line
     for band, flux in flux.items():
+        # Apply per-band multiplicative offset for readability (default 1 = no scaling)
+        scale = spread.get(band, 1.0) if spread is not None else 1.0
 
-        # Optional: Spread the data for legibility
-        if spread is not None and band in spread:
-            flux *= spread[band]
+        # Best-fit model line
+        ax.loglog(times, flux * scale, '--', color=colors.get(band), **ll_kwargs)
 
-        # Configure the plotting options as desired
-        ax.loglog(times, flux, '--', color=colors.get(band), **ll_kwargs)
+        # 16th–84th percentile shading from MCMC samples (pretty plot only)
+        if sigma is not None and band in sigma:
+            p16, p84 = sigma[band]
+            ax.fill_between(
+                times, p16 * scale, p84 * scale,
+                color=colors.get(band), alpha=0.2
+            )
 
     return fig, ax
 
@@ -394,6 +420,8 @@ def plot_observation(obs, spread=None, ax=None):
             )
 
     return ax
+
+
 # </editor-fold>
 
 
@@ -1066,3 +1094,4 @@ def plot_observation_indices(obs, axes):
 
     return axes
 # </editor-fold>
+
