@@ -241,7 +241,9 @@ class AMPy:
         ----------
         spread : dict, optional
 
-        sigma : int, optional
+        sigma : bool, optional
+            If truthy, compute a 16th–84th percentile uncertainty band from
+            the top 100 posterior samples by log-probability.
 
         path : str or ``pathlib.Path``, optional
             The path to save the light curve.
@@ -251,9 +253,18 @@ class AMPy:
         matplotlib.axes.Axes
             The light curve axes.
         """
+        samples = log_probs = param_view = None
+        if sigma:
+            samples = self.get_sampler().get_chain(flat=True)
+            log_probs = self.get_sampler().get_log_prob(flat=True)
+            param_view = self.inference_engine.param_view
+
         fig, ax = plotting.generate_light_curve(
             self.get_observation(), self.get_plugins(), self.get_best_params(),
-            spread=spread, sigma=sigma
+            spread=spread,
+            samples=samples,
+            log_probs=log_probs,
+            param_view=param_view
         )
 
         if path is not None:

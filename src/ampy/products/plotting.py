@@ -158,6 +158,9 @@ def generate_light_curve(
     spread=None,
     ax=None,
     sigma=None,
+    samples=None,
+    log_probs=None,
+    param_view=None,
     ll_kwargs=None,
     plot_kwargs=None
 ):
@@ -185,6 +188,21 @@ def generate_light_curve(
         The axes on which to plot. If not provided, a new one will be created
         using the `.default_light_curve_axes` function.
 
+    sigma : ignored
+        Deprecated. Does nothing.
+
+    samples : np.ndarray of float, optional
+        The flattened MCMC chain of shape (n_samples, n_params). If provided
+        alongside `log_probs` and `param_view`, the top 100 samples by
+        log-probability are used to compute a 16th–84th percentile uncertainty
+        band.
+
+    log_probs : np.ndarray of float, optional
+        Log-probabilities of shape (n_samples,) corresponding to `samples`.
+
+    param_view : ampy.core.params.ParameterView, optional
+        Used to convert raw samples to parameter dicts.
+
     ll_kwargs : dict[str, Any], optional
         Any keyword arguments accepted by matplotlib.pyplot.loglog. If any
         kwargs overlap with the default kwargs, then the provided kwargs will
@@ -208,14 +226,18 @@ def generate_light_curve(
         obs.epoch()[0], obs.epoch()[1], num=ndata, dtype=float
     )
 
-    # If MCMC samples are provided, compute the 16th–84th percentile
-    # uncertainty band for each band by stacking models across samples
+    # If posterior samples are provided, select the top 100 by log-probability
+    # and compute the 16th–84th percentile uncertainty band for each band.
     sigma_bands = None
-    if sigma is not None:
+    if samples is not None and log_probs is not None and param_view is not None:
+        top_idx = np.argsort(log_probs)[-100:]
+        top_samples = samples[top_idx]
+
         stacked = defaultdict(list)
-        for s in sigma:
+        for s in top_samples:
             try:
-                for band, f in generate_model(obs, plugins, s, ndata).items():
+                p = param_view.samples_to_dict(s)
+                for band, f in generate_model(obs, plugins, p, ndata).items():
                     stacked[band].append(f)
             except Exception:
                 continue
