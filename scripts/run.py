@@ -5,6 +5,7 @@ import pathlib
 import tomllib
 
 from ampy.ampy import AMPy
+from ampy.products.minimize import main as run_minimizer
 
 
 def parse_args():
@@ -88,6 +89,16 @@ def main(obs, registry, inf_cfg, output_dir,):
     # but it is a mega-all-in-one-plot. Each user will have a preference on
     # how to split the corners, so do it the way we want here.
     generate_corner_plots(ampy, output_dir)
+
+    # Run the minimizer using the MCMC best-fit as the starting point
+    logging.info("Running the minimizer...")
+
+    run_minimizer(
+        obs_path=obs,
+        registry_path=registry,
+        report_path=output_dir / "report.json",
+        results_dir=output_dir,
+    )
 
     logging.info("Completed successfully...")
 

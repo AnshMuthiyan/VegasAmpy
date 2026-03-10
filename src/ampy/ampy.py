@@ -224,7 +224,7 @@ class AMPy:
         self.summary(output_dir / "report.json")
         self.light_curve(path=output_dir / "light_curve.pdf")
         try:
-            self.light_curve(spread = 1, sigma= 1, path=output_dir / "light_curve_pretty.pdf")
+            self.light_curve(sigma=True, path=output_dir / "light_curve_pretty.pdf")
         except:
             print("Pretty light curve failed to generate.")
             pass
