@@ -156,7 +156,7 @@ class powerlawVegasModel:
         self._details_cache[t_key] = details
         return details
 
-    def days_to_sec(x):
+    def days_to_sec(self, x):
         """ Convert days to seconds. """
         return x * 86400
 

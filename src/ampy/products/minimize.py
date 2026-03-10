@@ -94,6 +94,7 @@ def log_results(p, out_dir):
     out_dir : Path
         The output directory.
     """
+    Path(out_dir).mkdir(parents=True, exist_ok=True)
     with open(Path(out_dir) / 'minimized.json', "w") as f:
         json.dump(p, f, indent=4)  # type: ignore
 
