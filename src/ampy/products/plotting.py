@@ -5,6 +5,7 @@ from inspect import isfunction
 import arviz as az
 import corner
 import numpy as np
+import scienceplots  # noqa: F401
 from matplotlib import pyplot as plt
 
 import ampy.core.utils as utils2
@@ -13,7 +14,7 @@ from ampy.defaults import SpectralPlotDefaults, CornerPlotDefaults
 from ampy.defaults import DensityProfileDefaults, BandColorMap
 from ampy.modeling.engine import ModelingEngine
 from ampy.modeling.models.base import MassP
-from ampy.modeling.plugins import CalibrationPlugin
+from ampy.modeling.plugins import CalibrationPlugin, AfterglowFluxPlugin
 from ampy.products import utils
 
 
@@ -155,7 +156,7 @@ def generate_light_curve(
     obs,
     plugins,
     params,
-    ndata=100,
+    ndata=200,
     spread=None,
     ax=None,
     sigma=None,
@@ -219,23 +220,26 @@ def generate_light_curve(
     matplotlib.axes.Axes
         The light curve axes.
     """
+    plt.style.use(['science'])
+
     # Best-fit flux for each observed band
     flux = generate_model(obs, plugins, params, ndata)
 
-    # Log-spaced time array spanning the observation epoch
+    # Log-spaced time array extending half a decade past the observation epoch
+    # on each side (matches VegasJetFit pretty_plot convention)
     times = np.geomspace(
-        obs.epoch()[0], obs.epoch()[1], num=ndata, dtype=float
+        obs.epoch()[0] / 2, obs.epoch()[1] * 2, num=ndata, dtype=float
     )
 
-    # If posterior samples are provided, select the top 100 by log-probability
-    # and compute the 16th–84th percentile uncertainty band for each band.
+    # If posterior samples are provided, draw 100 random samples and compute
+    # the 16th–84th percentile uncertainty band for each band.
     sigma_bands = None
-    if samples is not None and log_probs is not None and param_view is not None:
-        top_idx = np.argsort(log_probs)[-100:]
-        top_samples = samples[top_idx]
+    if samples is not None and param_view is not None:
+        rand_idx = np.random.randint(len(samples), size=100)
+        rand_samples = samples[rand_idx]
 
         stacked = defaultdict(list)
-        for s in top_samples:
+        for s in rand_samples:
             try:
                 p = param_view.samples_to_dict(s)
                 for band, f in generate_model(obs, plugins, p, ndata).items():
@@ -253,7 +257,8 @@ def generate_light_curve(
     )
 
     # Overlay the observed data points with per-band error bars
-    ax = plot_observation(obs, spread=spread, ax=ax)
+    cal_params = params.get('calibration', {}).get('eval') if isinstance(params, dict) else None
+    ax = plot_observation(obs, spread=spread, ax=ax, cal_params=cal_params)
 
     ax.set_xlim(times.min(), times.max())
 
@@ -268,6 +273,77 @@ def generate_light_curve(
 
     return fig, ax
 
+def generate_specrtum(obs, plugins, params, t_days=10.0, ndata=200):
+    """
+    Generates the model spectrum (flux vs frequency) at a fixed observer time.
+
+    Parameters
+    ----------
+    obs : ampy.core.obs.Observation
+        The observational data.
+
+    plugins : iterable of ampy.modeling.plugins.<plugin>
+        The plugins used to model the observation.
+
+    params : dict
+        The plugin parameters.
+
+    t_days : float, optional, default=10.0
+        Observer time [days] at which to evaluate the spectrum.
+
+    ndata : int, optional, default=200
+        Number of frequency points in the model spectrum.
+
+    Returns
+    -------
+    tuple
+        matplotlib.pyplot.Figure and matplotlib.axes.Axes
+    """
+    # Find the AfterglowFluxPlugin and instantiate the model
+    model_obj = None
+    for plugin in plugins:
+        if isinstance(plugin, AfterglowFluxPlugin):
+            model_cls = plugin.model
+            if isfunction(model_cls) or not isinstance(model_cls, type):
+                # Already instantiated during optimize()
+                model_obj = model_cls
+            else:
+                model_obj = model_cls(**params[plugin.name]['init'])
+            break
+
+    if model_obj is None:
+        raise ValueError("No AfterglowFluxPlugin found in plugins.")
+
+    # Compute the model spectrum at t_days over a wide frequency range
+    nu = np.logspace(9, 20, ndata)  # 1 GHz to ~40 keV
+    flux = model_obj.spectral_flux(t_days, nu)  # mJy
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+    colors = BandColorMap()
+
+    ax.loglog(nu, flux, color='black', linewidth=1.0, label=f't = {t_days} d')
+
+    # Overplot observed spectral flux data near t_days (within factor of 2)
+    for band, loc in obs.bands().items():
+        x_nu, y, e = [], [], []
+        for data in obs.data[loc]:
+            if data.type != DataType.SPECTRAL_FLUX:
+                continue
+            if 0.5 * t_days <= data.time.to_value('d') <= 2.0 * t_days:
+                x_nu.append(data.frequency.to_value('Hz'))
+                y.append(data.value.to_value('mJy'))
+                e.append(data.uncertainty.center.to_value('mJy'))
+        if x_nu:
+            ax.errorbar(x_nu, y, yerr=e, fmt='.', markersize=4,
+                        elinewidth=0.5, label=band, color=colors.get(band))
+
+    ax.set_xlabel('Frequency [Hz]')
+    ax.set_ylabel('Flux Density [mJy]')
+    ax.set_title(f'Spectrum at t = {t_days} days')
+    ax.grid(alpha=0.3)
+    ax.legend(loc='best')
+
+    return fig, ax
 
 def generate_model(obs, plugins, params, ndata=100) -> dict:
     """
@@ -383,7 +459,7 @@ def plot_lightcurve_model(
         scale = spread.get(band, 1.0) if spread is not None else 1.0
 
         # Best-fit model line
-        ax.loglog(times, flux * scale, '--', color=colors.get(band), **ll_kwargs)
+        ax.loglog(times, flux * scale, color=colors.get(band), **ll_kwargs)
 
         # 16th–84th percentile shading from MCMC samples (pretty plot only)
         if sigma is not None and band in sigma:
@@ -396,7 +472,7 @@ def plot_lightcurve_model(
     return fig, ax
 
 
-def plot_observation(obs, spread=None, ax=None):
+def plot_observation(obs, spread=None, ax=None, cal_params=None):
     """
 
     Parameters
@@ -411,11 +487,25 @@ def plot_observation(obs, spread=None, ax=None):
         The axes on which to plot. If not provided, a new one will be created
         using the `.default_light_curve_axes` function.
 
+    cal_params : dict[str, float], optional
+        Calibration offset values keyed by ``<group>_offset`` (e.g.
+        ``{'R_offset': -0.01, 'B_offset': 0.02}``). When provided, each
+        data point is shifted by the inverse of the calibration offset applied
+        to the model, i.e. multiplied by ``10^(+0.4 * offset)``.
+
     Returns
     -------
     matplotlib.axes.Axes
     """
     colors = BandColorMap()
+
+    # Build a per-data-point calibration factor array (inverse of model offset)
+    cal_factors = np.ones(len(obs.data))
+    if cal_params is not None and obs.offsets:
+        for group_name, positions in obs.offsets.items():
+            offset_key = f'{group_name}_offset'
+            if offset_key in cal_params:
+                cal_factors[positions] = 10.0 ** (0.4 * cal_params[offset_key])
 
     for band, loc in obs.bands().items():
         e, x, y = [], [], []
@@ -428,13 +518,13 @@ def plot_observation(obs, spread=None, ax=None):
             if data.type == DataType.INTEGRATED_FLUX:
                 data = data.to_spectral()
 
+            cal = cal_factors[loc[i]]
+            scale = (spread[band] if spread and band in spread else 1.0)
+
             # Store the flux, time, and uncertainty
             x.append(data.time.to_value('d'))
-            y.append(data.value.to_value('mJy'))
-            e.append(data.uncertainty.center.to_value('mJy'))
-
-            if spread and band in spread:
-                y[i] *= spread[band]
+            y.append(data.value.to_value('mJy') * cal * scale)
+            e.append(data.uncertainty.center.to_value('mJy') * cal * scale)
 
         if e and x and y:
             ax.errorbar(

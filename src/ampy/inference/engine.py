@@ -362,4 +362,4 @@ def log_likelihood_model(theta, engine, param_view):
         if not np.isfinite(ll):
             print(f"[DEBUG] Likelihood returned {ll} | theta = {theta}")
 
-        return ll
+    return ll

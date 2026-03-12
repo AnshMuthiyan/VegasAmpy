@@ -9,6 +9,9 @@ from ampy.ampy import AMPy
 from ampy.core import utils
 from ampy.core.structs import ScaleType
 from ampy.inference.engine import log_posterior_model
+from ampy.inference.priors import GaussianPrior
+from ampy.products import plotting
+from ampy.products.utils import save_plot_unique
 
 
 def safe_log_posterior_fn(theta, engine, param_view):
@@ -76,7 +79,8 @@ def run_minimizer(x0, func_args=(), bounds=(), minimizer='minimize'):
 
     elif minimizer == 'basinhopping':
         return optimize.basinhopping(
-            nmap, x0, minimizer_kwargs={"method": "L-BFGS-B", "args": func_args, "bounds": bounds}
+            nmap, x0,
+            minimizer_kwargs={"method": "L-BFGS-B", "args": func_args, "bounds": bounds}
         )
 
     raise ValueError(f"Unknown minimizer '{minimizer}'.")
@@ -131,15 +135,41 @@ def main(obs_path, registry_path, report_path, results_dir):
     with open(report_path, "r") as f:
         report = json.load(f)
 
+    # Build lookups from the report's inference params
+    report_priors = {
+        (rp['plugin'], rp['stage'], rp['name']): rp['prior']
+        for rp in report['inference']['params']
+        if 'prior' in rp
+    }
+    report_fixed = {
+        (rp['plugin'], rp['stage'], rp['name']): rp['value']
+        for rp in report['inference']['params']
+        if 'value' in rp
+    }
+
+    # Override fixed parameter values from the report
+    for p in param_view.fixed:
+        key = (p.plugin, p.stage, p.name)
+        if key in report_fixed:
+            p.value = report_fixed[key]
+
     # Set the initial search pos and bounds
     initial, bounds = [], []
 
     for p in param_view.fitting:
         # Best fit values are stored in linear space under report[plugin][stage][name]
         val = report[p.plugin][p.stage][p.name]
-        # print(p.infer_scale, val)
+        print(f"Parameter '{p.name}' best fit value from report: {val}")
         initial.append(utils.to_scale(val, ScaleType.LINEAR, p.infer_scale))
-        bounds.append((p.prior.lower, p.prior.upper))
+
+        # Use bounds from the report rather than the TOML
+        rprior = report_priors[(p.plugin, p.stage, p.name)]
+        if 'sigma' in rprior:  # Gaussian prior
+            bounds.append((rprior['mu'] - 3 * rprior['sigma'], rprior['mu'] + 3 * rprior['sigma']))
+            print(f"Parameter '{p.name}' Gaussian prior. Bounds: ({bounds[-1][0]}, {bounds[-1][1]})")
+        else:
+            bounds.append((rprior['lower'], rprior['upper']))
+            print(f"Parameter '{p.name}' uniform prior. Bounds: ({rprior['lower']}, {rprior['upper']})")
 
     # Run the minimizer
     func_args = (ampy.inference_engine.modeling_engine, param_view)
@@ -157,7 +187,26 @@ def main(obs_path, registry_path, report_path, results_dir):
     # Write the results to a JSON file
     log_results(min_params, results_dir)
 
+    # Plot the light curve at the minimized parameters
+    plotting.generate_light_curve(
+        ampy.get_observation(), ampy.get_plugins(), min_params
+    )
+
+    
+    # plotting.generate_specrtum(
+    #     ampy.get_observation(), ampy.get_plugins(), min_params
+    # )
+    # save_plot_unique(Path(results_dir) / 'spectrum.pdf')
+
+    save_plot_unique(Path(results_dir) / 'light_curve.pdf')
+
+    print(f"Success : {results.success}")
+    print(f"Message : {results.message}")
+    print(f"nmap    : {min_params['nmap']:.4f}")
+    print(f"nfev    : {results.nfev}")
+
     return results
+
 
 
 if __name__ == "__main__":
