@@ -42,7 +42,7 @@ def safe_log_posterior_fn(theta, engine, param_view):
     return lp if np.isfinite(lp) else -1e10
 
 
-def run_minimizer(x0, func_args=(), bounds=(), minimizer='minimize'):
+def run_minimizer(x0, func_args=(), bounds=(), minimizer='nelder-mead'):
     """
     Runs the minimizer on the negative maximum a
     posteriori (MAP).
@@ -76,6 +76,20 @@ def run_minimizer(x0, func_args=(), bounds=(), minimizer='minimize'):
 
     if minimizer == 'minimize':
         return optimize.minimize(nmap, x0, args=func_args, bounds=bounds)
+
+    elif minimizer == 'nelder-mead':
+        # Nelder-Mead is derivative-free — handles non-smooth posteriors well.
+        # It has no native bounds, so the penalty (-1e10) in safe_log_posterior_fn
+        # acts as a soft wall at the prior boundaries.
+        lowers = np.array([b[0] for b in bounds])
+        uppers = np.array([b[1] for b in bounds])
+        def bounded_nmap(theta):
+            if np.any(theta < lowers) or np.any(theta > uppers):
+                return 1e10
+            return nmap(theta, *func_args)
+        return optimize.minimize(bounded_nmap, x0, method='Nelder-Mead',
+                                options={'maxfev': 100_000, 'maxiter': 100_000,
+                                         'xatol': 1e-4, 'fatol': 1e-4})
 
     elif minimizer == 'basinhopping':
         return optimize.basinhopping(
@@ -175,7 +189,8 @@ def main(obs_path, registry_path, report_path, results_dir):
     func_args = (ampy.inference_engine.modeling_engine, param_view)
 
     results = run_minimizer(
-        x0=np.array(initial), func_args=func_args, bounds=np.array(bounds)
+        x0=np.array(initial), func_args=func_args, bounds=np.array(bounds),
+        minimizer='nelder-mead'
     )
 
     # Add some additional logging info
@@ -187,23 +202,24 @@ def main(obs_path, registry_path, report_path, results_dir):
     # Write the results to a JSON file
     log_results(min_params, results_dir)
 
-    # Plot the light curve at the minimized parameters
-    plotting.generate_light_curve(
-        ampy.get_observation(), ampy.get_plugins(), min_params
-    )
-
-    
-    # plotting.generate_specrtum(
-    #     ampy.get_observation(), ampy.get_plugins(), min_params
-    # )
-    # save_plot_unique(Path(results_dir) / 'spectrum.pdf')
-
-    save_plot_unique(Path(results_dir) / 'light_curve.pdf')
 
     print(f"Success : {results.success}")
     print(f"Message : {results.message}")
     print(f"nmap    : {min_params['nmap']:.4f}")
     print(f"nfev    : {results.nfev}")
+
+    
+    # Plot the light curve at the minimized parameters
+    plotting.generate_light_curve(
+        ampy.get_observation(), ampy.get_plugins(), min_params
+    )
+    save_plot_unique(Path(results_dir) / 'light_curve.pdf')
+
+    
+    plotting.generate_specrtum(
+        ampy.get_observation(), ampy.get_plugins(), min_params, t_days=0.01
+    )
+    save_plot_unique(Path(results_dir) / 'spectrum.pdf')
 
     return results
 

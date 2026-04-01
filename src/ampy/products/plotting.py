@@ -228,7 +228,7 @@ def generate_light_curve(
     # Log-spaced time array extending half a decade past the observation epoch
     # on each side (matches VegasJetFit pretty_plot convention)
     times = np.geomspace(
-        obs.epoch()[0] / 2, obs.epoch()[1] * 2, num=ndata, dtype=float
+        obs.epoch()[0], obs.epoch()[1], num=ndata, dtype=float
     )
 
     # If posterior samples are provided, draw 100 random samples and compute
