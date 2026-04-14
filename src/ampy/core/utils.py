@@ -195,7 +195,7 @@ def chi_squared_eff(f, y, e, s) -> float:
     float
         The effective chi-squared value.
     """
-    # Convert slop to linear space
+    # Convert slop to linear space linear-space average slop
     s_lin_avg = f * (10**s - 10**-s) / 2
 
     # Combine the slop and data uncertainties

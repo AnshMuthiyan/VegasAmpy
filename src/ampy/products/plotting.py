@@ -7,6 +7,7 @@ import corner
 import numpy as np
 import scienceplots  # noqa: F401
 from matplotlib import pyplot as plt
+plt.rcParams['text.usetex'] = False
 
 import ampy.core.utils as utils2
 from ampy.core.structs import DataType

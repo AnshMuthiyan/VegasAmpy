@@ -4,6 +4,7 @@ import pathlib
 
 import astropy.units as u
 from matplotlib import pyplot as plt
+plt.rcParams['text.usetex'] = False
 
 
 def convert_value_to_mjy(data, value):
