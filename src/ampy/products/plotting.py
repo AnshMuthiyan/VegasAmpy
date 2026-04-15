@@ -221,7 +221,7 @@ def generate_light_curve(
     matplotlib.axes.Axes
         The light curve axes.
     """
-    plt.style.use(['science'])
+    plt.style.use(['science', 'no-latex'])
 
     # Best-fit flux for each observed band
     flux = generate_model(obs, plugins, params, ndata)

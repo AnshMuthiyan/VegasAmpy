@@ -221,6 +221,12 @@ def main(obs_path, registry_path, report_path, results_dir):
     )
     save_plot_unique(Path(results_dir) / 'spectrum.pdf')
 
+    # Plot the spectral break frequencies at the minimized parameters
+    plotting.generate_spectral_plot(
+        ampy.get_observation(), [results.x], param_view, best_sample=results.x
+    )
+    save_plot_unique(Path(results_dir) / 'spectral_breaks.pdf')
+
     return results
 
 

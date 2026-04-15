@@ -3,6 +3,7 @@ import warnings
 
 import numpy as np
 from dust_extinction.parameter_averages import CCM89
+warnings.filterwarnings('ignore', message='x has no units', module='dust_extinction')
 
 from ampy.modeling.models.base import DAY2SEC, MassP, SpectralFluxModel, \
     IntegratedFluxModel, SpectralIndexModel
