@@ -88,6 +88,7 @@ def plot_trace(params, path=None, sampler=None, chain=None) -> None:
 
     # Use arviz style
     az.style.use("arviz-darkgrid")
+    plt.rcParams['text.usetex'] = False
 
     # Create the production inference data object
     var_names = [p.name for p in params.fitting]
@@ -222,6 +223,7 @@ def generate_light_curve(
         The light curve axes.
     """
     plt.style.use(['science', 'no-latex'])
+    plt.rcParams['text.usetex'] = False
 
     # Best-fit flux for each observed band
     flux = generate_model(obs, plugins, params, ndata)
